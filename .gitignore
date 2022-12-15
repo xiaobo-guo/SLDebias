@@ -1,2 +1,4 @@
 /env
 data/
+shell/
+program/__pycache__/

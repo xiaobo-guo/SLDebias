@@ -190,19 +190,16 @@ def prepare_data(dataset: str):
 
 
 def main():
-    # dataset = sys.argv[0]
-    # content_name = sys.argv[1]
-    # summary_name = sys.argv[2]
-    # seed = int(sys.argv[3])
-
-    # dataset = 'corpus-webis-tldr-17.json'
-    # content_name = 'body'
-    # summary_name = 'summary'
-    dataset = 'wikihowAll.csv'
-    content_name = 'text'
-    summary_name = 'headline'
     seed = 42
     random.seed(seed)
+
+    dataset = sys.argv[1]
+    if dataset == 'corpus-webis-tldr-17.json':
+        content_name = 'body'
+        summary_name = 'summary'
+    elif dataset == 'wikihowAll.csv':
+        content_name = 'text'
+        summary_name = 'headline'
 
     data_preparer = DataPreparer(dataset, content_name, summary_name)
     data = data_preparer.read_data()

@@ -168,13 +168,6 @@ def calculate_score(score_type_list,divided_type, model_type, metrics, random_ma
         metric = 'rouge_w_12_f_score'
     else:
         metric = metrics    
-    plot_folder = './ba_model/model/{}/{}/{}'.format(divided_type,metric,model_type)
-    if not os.path.exists(plot_folder):
-        os.makedirs(plot_folder)
-
-
-    plot_file = os.path.join(plot_folder, '{}-{}-{}.pdf'.format(dataset,model,random_mark))
-    ba_model.plot(plot_file)
 
     calculate_generation_length = list()
     for i, generation_length in enumerate(generation_length_list[:-1]):
