@@ -2,3 +2,6 @@
 data/
 shell/
 program/__pycache__/
+result/
+data/
+result_multi/

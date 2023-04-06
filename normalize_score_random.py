@@ -97,7 +97,7 @@ def get_params() -> Namespace:
                         help='the baseline for calculating')
     parser.add_argument('--split_size', type=int, default=10,
                         help='the baseline for calculating')
-    parser.add_argument('--normalize_method', default='linear',
+    parser.add_argument('--normalize_method', default='bayesian',
                         help='method for normalizing')
     args = parser.parse_args()
 
@@ -248,7 +248,50 @@ def get_model_data(data_file: str, args: Namespace) -> Tuple[Set[str], Set[str],
     return summ_ids, metrics, articles, data
 
 
-def get_correlation_score(correlator, data: Dict, metrics: Set[str], summ_ids: Set[str]) -> Dict[str, List[float]]:
+def get_correlation_score(correlator, data: Dict, metrics: Set[str], summ_ids: Set[str], map_function:Dict[str,Dict[str, float]]) -> Dict[str, List[float]]:
+    result = dict()
+    for metric in metrics:
+        coherence_scores, consistency_scores, fluency_scores, relevance_scores = [], [], [], []
+        metric_scores = []
+        for summ_id in summ_ids:
+            cur_metric = []
+            cur_coherence, cur_consistency, cur_fluency, cur_relevance = [], [], [], []
+            for _, item in data.items():
+                cur_metric.append(item[summ_id]['automatic_score'][metric] / map_function[summ_id][metric] * 100)
+                cur_coherence.append(
+                    item[summ_id]['annotation_score']["coherence"])
+                cur_consistency.append(
+                    item[summ_id]['annotation_score']["consistency"])
+                cur_fluency.append(
+                    item[summ_id]['annotation_score']["fluency"])
+                cur_relevance.append(
+                    item[summ_id]['annotation_score']["relevance"])
+
+            metric_scores.append(np.mean(cur_metric))
+            coherence_scores.append(np.mean(cur_coherence))
+            consistency_scores.append(np.mean(cur_consistency))
+            fluency_scores.append(np.mean(cur_fluency))
+            relevance_scores.append(np.mean(cur_relevance))
+
+        coherence_corr = correlator(coherence_scores, metric_scores)[0]
+        consistency_corr = correlator(consistency_scores, metric_scores)[0]
+        fluency_corr = correlator(fluency_scores, metric_scores)[0]
+        relevance_corr = correlator(relevance_scores, metric_scores)[0]
+
+        coherence_corrs_final = format(round(coherence_corr, 4), ".4f")
+        consistency_corrs_final = format(round(consistency_corr, 4), ".4f")
+        fluency_corrs_final = format(round(fluency_corr, 4), ".4f")
+        relevance_corrs_final = format(round(relevance_corr, 4), ".4f")
+
+        corr_list = [coherence_corrs_final, consistency_corrs_final,
+                     fluency_corrs_final, relevance_corrs_final]
+
+        result[metric] = corr_list
+    return result
+
+
+
+def get_correlation_score_old(correlator, data: Dict, metrics: Set[str], summ_ids: Set[str], map_function:Dict[str,Dict[str, float]]) -> Dict[str, List[float]]:
     result = dict()
     for metric in metrics:
         coherence_scores, consistency_scores, fluency_scores, relevance_scores = [], [], [], []
@@ -290,83 +333,6 @@ def get_correlation_score(correlator, data: Dict, metrics: Set[str], summ_ids: S
     return result
 
 
-def normalize_data(args, map_function_scale_list: List[str], data, summ_id_index, summ_id, metric, model_dict: Dict[str, Union[BayesianNetwork, LinearRegression, List[int]]]):
-    result = dict()
-    if args.normalize_method == 'bayesian':
-        model = BayesianNetwork().from_dict(model_dict['model'])
-    elif args.normalize_method == 'linear':
-        model = model_dict['model']
-    split_list = model_dict['split_list']
-
-    summary_item_list = list()
-    reference_item_list = list()
-    id_list = list()
-    for id, item in data.items():
-        id_list.append(id)
-        article_length = item['article_lens']
-        article_length_index = 0
-
-        if args.split_type == 'percent':
-            while article_length > split_list[article_length_index]:
-                article_length_index += 1
-        else:
-            article_length_index = int(article_length / args.split_size)
-
-        reference_length = int(item['reference_lens'] / 10)
-        generation_length = int(item[summ_id]['generation_lens'] / 10)
-
-        if args.normalize_method == 'bayesian':
-            summary_item_list.append(
-                [summ_id_index, article_length_index, reference_length, generation_length, None])
-            reference_item_list.append(
-                [summ_id_index, article_length_index, reference_length, reference_length, None])
-        elif args.normalize_method == 'linear':
-            summary_item_list.append(
-                [summ_id_index, article_length_index, reference_length, generation_length])
-            reference_item_list.append(
-                [summ_id_index, article_length_index, reference_length, reference_length])
-
-    if args.debug:
-        summary_item_list = summary_item_list[:5]
-        reference_item_list = reference_item_list[:5]
-        id_list = id_list[:5]
-
-    summary_predictd_result = list()
-    reference_predictd_result = list()
-
-    if args.normalize_method == 'bayesian':
-        summary_predicted_prob = model.predict_proba(
-            summary_item_list, check_input=False)
-        for it in summary_predicted_prob:
-            score = 0
-            for k, v in it[-1].parameters[0].items():
-                score += k*v
-            summary_predictd_result.append(score)
-
-        reference_predicted_prob = model.predict_proba(
-            reference_item_list, check_input=False)
-        for it in reference_predicted_prob:
-            score = 0
-            for k, v in it[-1].parameters[0].items():
-                score += k*v
-            reference_predictd_result.append(score)
-    elif args.normalize_method == 'linear':
-        summary_predictd_result = model.predict(summary_item_list)
-        reference_predictd_result = model.predict(reference_item_list)
-
-    for map_function_scale in map_function_scale_list:
-        result[map_function_scale] = dict()
-    for j, id in enumerate(id_list):
-        score = data[id][summ_id]['automatic_score'][metric]
-        for map_function_scale in map_function_scale_list:
-            if id not in result[map_function_scale]:
-                result[map_function_scale][id] = dict()
-            adjusted_score = map_score(map_function_scale,
-                                       score, summary_predictd_result[j], reference_predictd_result[j])
-            result[map_function_scale][id][metric] = adjusted_score
-    return summ_id, metric, result
-
-
 def map_score(map_function_scale: Union[int, str], score: float, summary_score: float, reference_score: float):
     if summary_score == 0:
         summary_score = 1e-2
@@ -379,64 +345,11 @@ def map_score(map_function_scale: Union[int, str], score: float, summary_score: 
     return adjusted_score
 
 
-def create_bayesian_model(args, analyze_info: AnalyzeCorrelationInfo, metric, folder: str) -> Tuple[BayesianNetwork, List[int]]:
-    random_data = list()
-    for i, model in enumerate(analyze_info.summ_ids):
-        model_data, split_list = get_baseline_data(
-            args.split_type, args.split_size, args.baseline, metric, model)
-        # for item in model_data[:300]:
-        for item in model_data:
-            random_data.append([i]+item)
-    key_list = ['model', 'article length',
-                'groundtruth length', 'generation length', 'score']
-    # edge_list = [(3, 4), (0, 4), (0, 3), (1,3)]
-    edge_list = [(3, 4), (0, 4), (0, 3)]
-    exclude_edges = [(4, 0), (4, 1), (4, 2), (4, 3), (3, 0),
-                     (3, 1), (3, 2), (2, 0), (2, 1), (1, 0), (0, 1), (0, 2)]
-    ba_model = BayesianNetwork.from_samples(
-        np.array(random_data), state_names=key_list, include_edges=edge_list, exclude_edges=exclude_edges)
-    plt_folder = os.path.join(os.path.join(folder, 'picture'), 'model')
-    if not os.path.exists(plt_folder):
-        os.makedirs(plt_folder)
-    plt_file = os.path.join(plt_folder, "{}.pdf".format(metric))
-    ba_model.plot(plt_file)
-    ba_model = ba_model.to_dict()
-    return ba_model, split_list
 
 
-def create_linear_model(args, analyze_info: AnalyzeCorrelationInfo, metric, folder: str) -> Tuple[LinearRegression, List[int]]:
-    random_data = list()
-    for i, model in enumerate(analyze_info.summ_ids):
-        model_data, split_list = get_baseline_data(
-            args.split_type, args.split_size, args.baseline, metric, model)
-        for item in model_data:
-            random_data.append([i]+item)
-
-    model = make_pipeline(StandardScaler(with_mean=False), LinearRegression())
-    data = np.array(random_data)
-    x_data = data[:, :-1]
-    y_data = data[:, -1]
-    model.fit(x_data, y_data)
-    return model, split_list
-
-
-def create_trans_model(args, analyze_info: AnalyzeCorrelationInfo, folder: str) -> Dict[str, Union[BayesianNetwork, List[int], LinearRegression]]:
-    network_dict = dict()
-    for metric in tqdm.tqdm(analyze_info.sorted_keys, desc='create network', ncols=100):
-        if args.normalize_method == 'bayesian':
-            model, split_list = create_bayesian_model(
-                args, analyze_info, metric, folder)
-        elif args.normalize_method == 'linear':
-            model, split_list = create_linear_model(
-                args, analyze_info, metric, folder)
-        network_dict[metric] = {'model': model, 'split_list': split_list}
-
-    return network_dict
-
-
-def calculate_new_score(args, analyze_info, map_function_scale_list, data, model_dict):
+def calculate_new_score(args, analyze_info, map_function_scale_list, data, model_dict={}):
     pbar = tqdm.tqdm(total=len(analyze_info.sorted_keys)
-                     * len(analyze_info.summ_ids), ncols=100, desc='normalize score',dynamic_ncols=True)
+                     * len(analyze_info.summ_ids), ncols=100, desc='normalize score')
     update = lambda *args: pbar.update()
     new_data = dict()
     res_list = list()
@@ -477,12 +390,55 @@ def calculate_new_score(args, analyze_info, map_function_scale_list, data, model
     return new_data
 
 
+def get_normalize_model(data, metrics, summ_ids, random_seed):
+
+    normalize_function = DefaultDict(lambda: defaultdict(float))
+    file = "./random_baseline.json"
+    random_score_dict = dict()
+    with open(file,mode='r',encoding='utf8') as fp:
+        for line in fp.readlines():
+            temp = json.loads(line.strip())
+            random_score_dict = {int(k):temp[k] for k in list(temp.keys())}
+
+    length_dict = dict()
+    model_list = ['M1', 'M5', 'M8', 'M9', 'M10', 'M11',
+                            'M12', 'M13', 'M14', 'M15', 'M17', 'M20', 'M22', 'M23']
+    for model in model_list:
+        length_dict[model] = list()
+    for _, item in data.items():
+        for m in model_list:
+            length_dict[m].append(len(item[m]['generation'].split()))
+    for m in model_list:
+        length_dict[m] = int(np.mean(length_dict[m]))
+
+    length_list = list(random_score_dict.keys())
+    for summ_id in summ_ids:
+        generation_length = length_dict[summ_id]
+        low_index = 0
+        high_index = 1
+        for i, length in enumerate(length_list[1:]):
+            if length >= generation_length:
+                low_index = i
+                high_index = i+1
+                break
+        for metric in metrics:
+            high_score = random_score_dict[length_list[high_index]][metric]
+            low_score = random_score_dict[length_list[low_index]][metric]
+            score = (high_score - low_score) / (length_list[high_index] - length_list[low_index])* (generation_length - length_list[low_index])+low_score
+            normalize_function[summ_id][metric] = score
+    return normalize_function
+
+
 def compare_correlation(analyze_info: AnalyzeCorrelationInfo, map_function_scale_list: str):
     args = get_params()
     baseline = args.baseline
     _, metrics, articles, data = get_model_data(args.input_file, args)
     summ_ids = analyze_info.summ_ids
     split_size = int(args.split_size)
+
+
+
+    map_function = get_normalize_model(data,analyze_info.sorted_keys, analyze_info.summ_ids)
 
     print('{} {} {}'.format(baseline, args.split_type, split_size))
 
@@ -492,28 +448,29 @@ def compare_correlation(analyze_info: AnalyzeCorrelationInfo, map_function_scale
         os.makedirs(folder)
     correlator_dict = {'pearsonr': pearsonr, 'kendallatu': kendalltau}
     old_result = dict()
+    new_data = dict()
     for correlator_name, correlator in correlator_dict.items():
         correlator_score_folder = os.path.join(
             os.path.join(folder, 'score'), correlator_name)
         if not os.path.exists(correlator_score_folder):
             os.makedirs(correlator_score_folder)
-        old_result[correlator_name] = get_correlation_score(
-            correlator, data, analyze_info.sorted_keys, analyze_info.summ_ids)
-        with open(os.path.join(correlator_score_folder, 'original_result.csv'), mode='w', encoding='utf8') as fp:
-            fp.write("Metrics,Coherence,Consistency,Fluency,Relevance\n")
-            for k, v in old_result[correlator_name].items():
-                fp.write('{},{}\n'.format(k, ','.join(v)))
+        old_result[correlator_name] = get_correlation_score_old(
+            correlator, data, analyze_info.sorted_keys, analyze_info.summ_ids, map_function)
+        # with open(os.path.join(correlator_score_folder, 'original_result.csv'), mode='w', encoding='utf8') as fp:
+        #     fp.write("Metrics,Coherence,Consistency,Fluency,Relevance\n")
+        #     for k, v in old_result[correlator_name].items():
+        #         fp.write('{},{}\n'.format(k, ','.join(v)))
 
-    network_dict = create_trans_model(args, analyze_info, folder)
+    # network_dict = create_trans_model(args, analyze_info, folder)
 
-    new_data = calculate_new_score(
-        args, analyze_info, map_function_scale_list, data, network_dict)
-
-    data_folder = os.path.join(folder, 'data')
-    if not os.path.exists(data_folder):
-        os.makedirs(data_folder)
-    with open(os.path.join(data_folder, 'score.json'), mode='w', encoding='utf8') as fp:
-        json.dump(new_data, fp)
+        new_data[correlator_name] = get_correlation_score(
+                correlator, data, analyze_info.sorted_keys, analyze_info.summ_ids, map_function)
+    
+    # data_folder = os.path.join(folder, 'data')
+    # if not os.path.exists(data_folder):
+    #     os.makedirs(data_folder)
+    # with open(os.path.join(data_folder, 'score.json'), mode='w', encoding='utf8') as fp:
+    #     json.dump(new_data, fp)
 
     record_dict = dict()
     pbar = tqdm.tqdm(total=len(map_function_scale_list)
@@ -522,9 +479,8 @@ def compare_correlation(analyze_info: AnalyzeCorrelationInfo, map_function_scale
         record_dict[correlator_name] = list()
         correlator_score_folder = os.path.join(
             os.path.join(folder, 'score'), correlator_name)
-        for map_function_scale, data in new_data.items():
-            result = get_correlation_score(
-                correlator, data, analyze_info.sorted_keys, analyze_info.summ_ids)
+        for map_function_scale in [-4,-3,-2,-1,0,1,2,3,4]:
+            result = new_data[correlator_name]
             with open(os.path.join(correlator_score_folder, 'result_{}.csv'.format(map_function_scale)), mode='w', encoding='utf8') as fp:
                 fp.write("Metrics,Coherence,Consistency,Fluency,Relevance\n")
                 for k, v in result.items():
@@ -574,15 +530,13 @@ def compare_correlation(analyze_info: AnalyzeCorrelationInfo, map_function_scale
     for _, record_list in record_dict.items():
         for record in record_list:
             print(record)
-    return result
 
 
 
-    
 def main():
-    analyze_info = AnalyzeCorrelationInfo()
     map_function_scale_list = ['no', -4, -3, -2, -1, 0, 1, 2, 3, 4]
     random.seed(42)
+    analyze_info = AnalyzeCorrelationInfo()
     compare_correlation(analyze_info, map_function_scale_list)
 
 
