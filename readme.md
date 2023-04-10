@@ -114,8 +114,10 @@ For the experiments of the Score Adjustment, please run the following command:
 ./shell/score_adjustment.sh
 ```
 
-Then to generate the comparison results of the adjusted and original score for both Bayesian network and linear regression, please run the following commands:
+Then to generate the comparison results of the adjusted and original score for random method, Bayesian network and linear regression, please run the following commands:
 ```
+python ./run_random_baseline.py
+python ./normalize_score_random.py --baseline=prediction --split_type=percent --split_size=10 --normalize_method=random
 python ./normalize_score.py --baseline=prediction --split_type=percent --split_size=10 --normalize_method=bayesian
 python ./normalize_score.py --baseline=prediction --split_type=percent --split_size=10 --normalize_method=linear
 ```
