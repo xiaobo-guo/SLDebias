@@ -1,11 +1,11 @@
-# Title
+# Length Does Matter: Summary Length can Bias Summarization Metrics
 
-This it the code for the paper .
+This repo covers implementations Length Does Matter: Summary Length can Bias Summarization Metrics by Xiaobo Guo and [Soroush Vosoughi](https://www.cs.dartmouth.edu/~soroush/). The paper will be published at EMNLP 2023.
 
 ## Setup
-The code is prepared for python 3.8.10. 
+The code is prepared for Python 3.8.10.
 
-To run the code please run the following code for installing packages:
+To run the code, please run the following code for installing packages:
 
 ```
 pip install -r ./requirements.txt
@@ -17,8 +17,8 @@ pip install -e .
 Please run the following command and add it to your startup script:
 
 ```
-export ROUGE_HOME=/home/xiaobo/SLP-clean/SummEval/evaluation/summ_eval/ROUGE-1.5.5/
-export PYTHONPATH=$PYTHONPATH:/home/xiaobo/SLP/SummEval/evaluation/summ_eval
+export ROUGE_HOME=/$Home/SLDebias/SummEval/evaluation/summ_eval/ROUGE-1.5.5/
+export PYTHONPATH=$PYTHONPATH:/$Home/SLDebias/SummEval/evaluation/summ_eval
 ```
 
 Please also run these commands:
@@ -31,10 +31,10 @@ sudo apt install openjdk-8-jdk
 
 ## Prepare Data
 
-You will need to prepare the data for three datasets: CNN/DailyMail, WikiHow, and Webis-TLDR-17. We will introduce the prepare of them one by one.
+You must prepare the data for three datasets: CNN/DailyMail, WikiHow, and Webis-TLDR-17. We will introduce the preparation of them one by one.
 
 ### CNN/DailyMail 
-For the CNN/DailyMail dataset, you can download it from [here](https://www.kaggle.com/datasets/gowrishankarp/newspaper-text-summarization-cnn-dailymail), unzip the file and put it in the folder: 
+For the CNN/DailyMail dataset, you can download it from [here](https://www.kaggle.com/datasets/gowrishankarp/newspaper-text-summarization-cnn-dailymail), unzip the file, and put it in the folder: 
 
 > ./data
 
@@ -50,7 +50,7 @@ For the WikiHow dataset, you can download it from [here](https://ucsb.app.box.co
 
 > ./data/original
 
-Then run the following commnad:
+Then run the following command:
 
 ```
 python ./util/prepare_data.py wikihowAll.csv
@@ -61,7 +61,7 @@ For the Webis-TLDR-17 dataset, you can download from [here](https://webis.de/dat
 
 > ./data/orginal
 
-Then run the following commnad:
+Then run the following command:
 
 ```
 python ./util/prepare_data.py corpus-webis-tldr-17.json
@@ -69,19 +69,19 @@ python ./util/prepare_data.py corpus-webis-tldr-17.json
 
 
 ### Adjustment Experiments
-For the experiments of score adjustment, please follow the instruction of the [SummEval](https://github.com/Yale-LILY/SummEval/blob/master/README.md) for preparing the data.
+For the experiments of score adjustment, please follow the instructions of the [SummEval](https://github.com/Yale-LILY/SummEval/blob/master/README.md) for preparing the data.
 
 
 ## Fine-tune Model
 
-In our paper, we fine-tune three models on 3 datasets. We suggget using the predictions provided by us for metrics analysis but we also provides the code for fine-tuning the model yourself.
+In our paper, we fine-tune three models on 3 datasets. We suggest using the predictions provided by us for metrics analysis but we also provide the code for fine-tuning the model yourself.
 
 For fine-tuning the model, please run the following code:
 ```
 ./shell/fine_tune_model.sh
 ```
 
-Noting that there are 9 models trained in the shell file, you can also split them to parallelly fine-tune the models.
+Noting that are 9 models trained in the shell file, you can also split them to fine-tune the models parallelly.
 
 ## Analyze Metrics Trends
 We provide the prediction results in the following path:
@@ -114,7 +114,7 @@ For the experiments of the Score Adjustment, please run the following command:
 ./shell/score_adjustment.sh
 ```
 
-Then to generate the comparison results of the adjusted and original score for random method, Bayesian network and linear regression, please run the following commands:
+Then to generate the comparison results of the adjusted and original score for the random method, Bayesian network, and linear regression, please run the following commands:
 ```
 python ./run_random_baseline.py
 python ./normalize_score_random.py --baseline=prediction --split_type=percent --split_size=10 --normalize_method=random
@@ -122,7 +122,7 @@ python ./normalize_score.py --baseline=prediction --split_type=percent --split_s
 python ./normalize_score.py --baseline=prediction --split_type=percent --split_size=10 --normalize_method=linear
 ```
 
-To generate the Figure of the difference between Bayesian network and the Lienar regression please run the command:
+To generate the Figure of the difference between the Bayesian network and the Linear regression please run the command:
 ```
 python ./util/draw_normalize.py
 ```
